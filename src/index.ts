@@ -1,56 +1,10 @@
 
 import Fastify from "fastify";
-
 import { pool } from "./db.js";
 
 const app = Fastify({
   logger: true,
 });
-
-type Product = {
-  id: number;
-  name: string;
-  price: number;
-};
-
-const products: Product[] = [
-  { id: 1, name: "コーヒー", price: 350 },
-  { id: 2, name: "カフェラテ", price: 450 },
-  { id: 3, name: "抹茶ラテ", price: 500 },
-];
-
-app.get("/health", async () => {
-  return { status: "ok" };
-});
-
-app.get("/products", async () => {
-  return products;
-});
-
-app.get<{ Params: { id: string } }>(
-  "/products/:id",
-  async (request, reply) => {
-    const id = Number(request.params.id);
-
-    if (!Number.isSafeInteger(id) || id <= 0) {
-      return reply.code(400).send({
-        error: "Invalid product ID",
-      });
-    }
-
-    const product = products.find((item) => item.id === id);
-
-    if (!product) {
-      return reply.code(404).send({
-        error: "Product not found",
-      });
-    }
-
-    return product;
-  }
-);
-
-
 
 type OrderStatus =
   | "received"
@@ -58,16 +12,53 @@ type OrderStatus =
   | "ready"
   | "completed";
 
-type Order = {
-  id: number;
-  productId: number;
-  quantity: number;
-  totalPrice: number;
-  status: OrderStatus;
+const parseId = (value: string): number | null => {
+  const id = Number(value);
+
+  if (!Number.isSafeInteger(id) || id <= 0 || id > 2147483647) {
+    return null;
+  }
+
+  return id;
 };
 
+app.get("/health", async () => {
+  return { status: "ok" };
+});
 
-const orders: Order[] = [];
+app.get("/products", async () => {
+  const result = await pool.query(
+    "SELECT id, name, price FROM products ORDER BY id"
+  );
+
+  return result.rows;
+});
+
+app.get<{ Params: { id: string } }>(
+  "/products/:id",
+  async (request, reply) => {
+    const id = parseId(request.params.id);
+
+    if (id === null) {
+      return reply.code(400).send({
+        error: "Invalid product ID",
+      });
+    }
+
+    const result = await pool.query(
+      "SELECT id, name, price FROM products WHERE id = $1",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.code(404).send({
+        error: "Product not found",
+      });
+    }
+
+    return result.rows[0];
+  }
+);
 
 app.post<{
   Body: {
@@ -83,148 +74,16 @@ app.post<{
         required: ["productId", "quantity"],
         additionalProperties: false,
         properties: {
-          productId: { type: "integer", minimum: 1 },
-          quantity: { type: "integer", minimum: 1 },
-        },
-      },
-    },
-  },
-  async (request, reply) => {
-    const { productId, quantity } = request.body;
-
-    const product = products.find(
-      (item) => item.id === productId
-    );
-
-    if (!product) {
-      return reply.code(404).send({
-        error: "Product not found",
-      });
-    }
-
-    const order: Order = {
-      id: orders.length + 1,
-      productId,
-      quantity,
-      totalPrice: product.price * quantity,
-      status: "received",
-    };
-
-    orders.push(order);
-
-    return reply.code(201).send(order);
-  }
-);
-
-
-app.get<{ Params: { id: string } }>(
-  "/orders/:id",
-  async (request, reply) => {
-    const id = Number(request.params.id);
-
-    if (!Number.isSafeInteger(id) || id <= 0) {
-      return reply.code(400).send({
-        error: "Invalid order ID",
-      });
-    }
-
-    const order = orders.find(
-      (item) => item.id === id
-    );
-
-    if (!order) {
-      return reply.code(404).send({
-        error: "Order not found",
-      });
-    }
-
-    return reply.code(200).send(order);
-  }
-);
-
-const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-  received: ["preparing"],
-  preparing: ["ready"],
-  ready: ["completed"],
-  completed: [],
-};
-
-app.patch<{
-  Params: { id: string };
-  Body: { status: OrderStatus };
-}>(
-  "/orders/:id/status",
-  {
-    schema: {
-      body: {
-        type: "object",
-        required: ["status"],
-        additionalProperties: false,
-        properties: {
-          status: {
-            type: "string",
-            enum: ["received", "preparing", "ready", "completed"],
+          productId: {
+            type: "integer",
+            minimum: 1,
+            maximum: 2147483647,
           },
-        },
-      },
-    },
-  },
-  async (request, reply) => {
-    const id = Number(request.params.id);
-
-    if (!Number.isSafeInteger(id) || id <= 0) {
-      return reply.code(400).send({
-        error: "Invalid order ID",
-      });
-    }
-
-    const order = orders.find((item) => item.id === id);
-
-    if (!order) {
-      return reply.code(404).send({
-        error: "Order not found",
-      });
-    }
-
-    const nextStatus = request.body.status;
-
-    if (!allowedTransitions[order.status].includes(nextStatus)) {
-      return reply.code(409).send({
-        error: "Invalid status transition",
-      });
-    }
-
-    order.status = nextStatus;
-
-    return reply.code(200).send(order);
-  }
-);
-
-app.get("/db-products", async () => {
-  const result = await pool.query(
-    "SELECT id, name, price FROM products ORDER BY id"
-  );
-
-  return result.rows;
-});
-
-
-app.post<{
-  Body: {
-    productId: number;
-    quantity: number;
-  };
-}>(
-  "/db-orders",
-  {
-    schema: {
-      body: {
-        type: "object",
-        required: ["productId", "quantity"],
-        additionalProperties: false,
-        properties: {
-          productId: { type: "integer", minimum: 1 },
-          quantity: { type: "integer", minimum: 1, maximum: 99 },
+          quantity: {
+            type: "integer",
+            minimum: 1,
+            maximum: 99,
+          },
         },
       },
     },
@@ -258,13 +117,12 @@ app.post<{
   }
 );
 
-
 app.get<{ Params: { id: string } }>(
-  "/db-orders/:id",
+  "/orders/:id",
   async (request, reply) => {
-    const id = Number(request.params.id);
+    const id = parseId(request.params.id);
 
-    if (!Number.isSafeInteger(id) || id <= 0) {
+    if (id === null) {
       return reply.code(400).send({
         error: "Invalid order ID",
       });
@@ -272,13 +130,13 @@ app.get<{ Params: { id: string } }>(
 
     const result = await pool.query(
       `SELECT
-        id,
-        product_id AS "productId",
-        quantity,
-        unit_price AS "unitPrice",
-        total_price AS "totalPrice",
-        status,
-        created_at AS "createdAt"
+         id,
+         product_id AS "productId",
+         quantity,
+         unit_price AS "unitPrice",
+         total_price AS "totalPrice",
+         status,
+         created_at AS "createdAt"
        FROM orders
        WHERE id = $1`,
       [id]
@@ -290,16 +148,15 @@ app.get<{ Params: { id: string } }>(
       });
     }
 
-    return reply.code(200).send(result.rows[0]);
+    return result.rows[0];
   }
 );
-
 
 app.patch<{
   Params: { id: string };
   Body: { status: OrderStatus };
 }>(
-  "/db-orders/:id/status",
+  "/orders/:id/status",
   {
     schema: {
       body: {
@@ -316,18 +173,15 @@ app.patch<{
     },
   },
   async (request, reply) => {
-    const id = Number(request.params.id);
-    const nextStatus = request.body.status;
+    const id = parseId(request.params.id);
 
-    if (
-      !Number.isSafeInteger(id) ||
-      id <= 0 ||
-      id > 2147483647
-    ) {
+    if (id === null) {
       return reply.code(400).send({
         error: "Invalid order ID",
       });
     }
+
+    const nextStatus = request.body.status;
 
     const result = await pool.query(
       `UPDATE orders
@@ -346,8 +200,7 @@ app.patch<{
          quantity,
          unit_price AS "unitPrice",
          total_price AS "totalPrice",
-         status,
-         created_at AS "createdAt"`,
+         status`,
       [id, nextStatus]
     );
 
@@ -372,7 +225,10 @@ app.patch<{
   }
 );
 
-app.listen({ port: 3000, host: "127.0.0.1" })
+app.listen({
+  port: 3000,
+  host: "127.0.0.1",
+})
   .then((address) => {
     console.log(`MiniOrder API running at ${address}`);
   })
