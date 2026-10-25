@@ -49,13 +49,21 @@ app.get<{ Params: { id: string } }>(
 );
 
 
+
+type OrderStatus =
+  | "received"
+  | "preparing"
+  | "ready"
+  | "completed";
+
 type Order = {
   id: number;
   productId: number;
   quantity: number;
   totalPrice: number;
-  status: "received";
+  status: OrderStatus;
 };
+
 
 const orders: Order[] = [];
 
@@ -127,6 +135,64 @@ app.get<{ Params: { id: string } }>(
         error: "Order not found",
       });
     }
+
+    return reply.code(200).send(order);
+  }
+);
+
+const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
+  received: ["preparing"],
+  preparing: ["ready"],
+  ready: ["completed"],
+  completed: [],
+};
+
+app.patch<{
+  Params: { id: string };
+  Body: { status: OrderStatus };
+}>(
+  "/orders/:id/status",
+  {
+    schema: {
+      body: {
+        type: "object",
+        required: ["status"],
+        additionalProperties: false,
+        properties: {
+          status: {
+            type: "string",
+            enum: ["received", "preparing", "ready", "completed"],
+          },
+        },
+      },
+    },
+  },
+  async (request, reply) => {
+    const id = Number(request.params.id);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return reply.code(400).send({
+        error: "Invalid order ID",
+      });
+    }
+
+    const order = orders.find((item) => item.id === id);
+
+    if (!order) {
+      return reply.code(404).send({
+        error: "Order not found",
+      });
+    }
+
+    const nextStatus = request.body.status;
+
+    if (!allowedTransitions[order.status].includes(nextStatus)) {
+      return reply.code(409).send({
+        error: "Invalid status transition",
+      });
+    }
+
+    order.status = nextStatus;
 
     return reply.code(200).send(order);
   }
