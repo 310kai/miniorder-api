@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "dev": "tsx watch src/index.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "DOTENV_CONFIG_PATH=.env.test vitest run --config vitest.integration.config.ts"
   },
   "repository": {
     "type": "git",
