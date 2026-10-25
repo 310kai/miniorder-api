@@ -1,6 +1,8 @@
 
 import Fastify from "fastify";
 
+import { pool } from "./db.js";
+
 const app = Fastify({
   logger: true,
 });
@@ -195,6 +197,100 @@ app.patch<{
     order.status = nextStatus;
 
     return reply.code(200).send(order);
+  }
+);
+
+app.get("/db-products", async () => {
+  const result = await pool.query(
+    "SELECT id, name, price FROM products ORDER BY id"
+  );
+
+  return result.rows;
+});
+
+
+app.post<{
+  Body: {
+    productId: number;
+    quantity: number;
+  };
+}>(
+  "/db-orders",
+  {
+    schema: {
+      body: {
+        type: "object",
+        required: ["productId", "quantity"],
+        additionalProperties: false,
+        properties: {
+          productId: { type: "integer", minimum: 1 },
+          quantity: { type: "integer", minimum: 1, maximum: 99 },
+        },
+      },
+    },
+  },
+  async (request, reply) => {
+    const { productId, quantity } = request.body;
+
+    const result = await pool.query(
+      `INSERT INTO orders
+        (product_id, quantity, unit_price, total_price)
+       SELECT id, $2::integer, price, price * $2::integer
+       FROM products
+       WHERE id = $1::integer
+       RETURNING
+         id,
+         product_id AS "productId",
+         quantity,
+         unit_price AS "unitPrice",
+         total_price AS "totalPrice",
+         status`,
+      [productId, quantity]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.code(404).send({
+        error: "Product not found",
+      });
+    }
+
+    return reply.code(201).send(result.rows[0]);
+  }
+);
+
+
+app.get<{ Params: { id: string } }>(
+  "/db-orders/:id",
+  async (request, reply) => {
+    const id = Number(request.params.id);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return reply.code(400).send({
+        error: "Invalid order ID",
+      });
+    }
+
+    const result = await pool.query(
+      `SELECT
+        id,
+        product_id AS "productId",
+        quantity,
+        unit_price AS "unitPrice",
+        total_price AS "totalPrice",
+        status,
+        created_at AS "createdAt"
+       FROM orders
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.code(404).send({
+        error: "Order not found",
+      });
+    }
+
+    return reply.code(200).send(result.rows[0]);
   }
 );
 
