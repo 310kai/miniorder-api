@@ -106,6 +106,32 @@ app.post<{
   }
 );
 
+
+app.get<{ Params: { id: string } }>(
+  "/orders/:id",
+  async (request, reply) => {
+    const id = Number(request.params.id);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return reply.code(400).send({
+        error: "Invalid order ID",
+      });
+    }
+
+    const order = orders.find(
+      (item) => item.id === id
+    );
+
+    if (!order) {
+      return reply.code(404).send({
+        error: "Order not found",
+      });
+    }
+
+    return reply.code(200).send(order);
+  }
+);
+
 app.listen({ port: 3000, host: "127.0.0.1" })
   .then((address) => {
     console.log(`MiniOrder API running at ${address}`);
