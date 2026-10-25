@@ -1,0 +1,67 @@
+
+name: MiniOrder CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      DB_USER: miniorder_test
+      DB_PASSWORD: miniorder_ci_only_password
+      DB_NAME: miniorder_test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5434"
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: miniorder_test
+          POSTGRES_PASSWORD: miniorder_ci_only_password
+          POSTGRES_DB: miniorder_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U miniorder_test -d miniorder_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Unit and API validation tests
+        run: npm test
+
+      - name: Initialize test database
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" \
+            psql -v ON_ERROR_STOP=1 \
+            -U miniorder_test \
+            -d miniorder_test < db/schema.sql
+
+      - name: PostgreSQL integration tests
+        run: npm run test:integration
