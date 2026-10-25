@@ -48,6 +48,64 @@ app.get<{ Params: { id: string } }>(
   }
 );
 
+
+type Order = {
+  id: number;
+  productId: number;
+  quantity: number;
+  totalPrice: number;
+  status: "received";
+};
+
+const orders: Order[] = [];
+
+app.post<{
+  Body: {
+    productId: number;
+    quantity: number;
+  };
+}>(
+  "/orders",
+  {
+    schema: {
+      body: {
+        type: "object",
+        required: ["productId", "quantity"],
+        additionalProperties: false,
+        properties: {
+          productId: { type: "integer", minimum: 1 },
+          quantity: { type: "integer", minimum: 1 },
+        },
+      },
+    },
+  },
+  async (request, reply) => {
+    const { productId, quantity } = request.body;
+
+    const product = products.find(
+      (item) => item.id === productId
+    );
+
+    if (!product) {
+      return reply.code(404).send({
+        error: "Product not found",
+      });
+    }
+
+    const order: Order = {
+      id: orders.length + 1,
+      productId,
+      quantity,
+      totalPrice: product.price * quantity,
+      status: "received",
+    };
+
+    orders.push(order);
+
+    return reply.code(201).send(order);
+  }
+);
+
 app.listen({ port: 3000, host: "127.0.0.1" })
   .then((address) => {
     console.log(`MiniOrder API running at ${address}`);
