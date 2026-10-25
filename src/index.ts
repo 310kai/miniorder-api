@@ -294,6 +294,84 @@ app.get<{ Params: { id: string } }>(
   }
 );
 
+
+app.patch<{
+  Params: { id: string };
+  Body: { status: OrderStatus };
+}>(
+  "/db-orders/:id/status",
+  {
+    schema: {
+      body: {
+        type: "object",
+        required: ["status"],
+        additionalProperties: false,
+        properties: {
+          status: {
+            type: "string",
+            enum: ["received", "preparing", "ready", "completed"],
+          },
+        },
+      },
+    },
+  },
+  async (request, reply) => {
+    const id = Number(request.params.id);
+    const nextStatus = request.body.status;
+
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0 ||
+      id > 2147483647
+    ) {
+      return reply.code(400).send({
+        error: "Invalid order ID",
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET status = $2::text
+       WHERE id = $1
+         AND (
+           (status = 'received' AND $2::text = 'preparing')
+           OR
+           (status = 'preparing' AND $2::text = 'ready')
+           OR
+           (status = 'ready' AND $2::text = 'completed')
+         )
+       RETURNING
+         id,
+         product_id AS "productId",
+         quantity,
+         unit_price AS "unitPrice",
+         total_price AS "totalPrice",
+         status,
+         created_at AS "createdAt"`,
+      [id, nextStatus]
+    );
+
+    if (result.rows.length > 0) {
+      return reply.code(200).send(result.rows[0]);
+    }
+
+    const existing = await pool.query(
+      "SELECT id FROM orders WHERE id = $1",
+      [id]
+    );
+
+    if (existing.rows.length === 0) {
+      return reply.code(404).send({
+        error: "Order not found",
+      });
+    }
+
+    return reply.code(409).send({
+      error: "Invalid status transition",
+    });
+  }
+);
+
 app.listen({ port: 3000, host: "127.0.0.1" })
   .then((address) => {
     console.log(`MiniOrder API running at ${address}`);
