@@ -25,6 +25,29 @@ app.get("/products", async () => {
   return products;
 });
 
+app.get<{ Params: { id: string } }>(
+  "/products/:id",
+  async (request, reply) => {
+    const id = Number(request.params.id);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return reply.code(400).send({
+        error: "Invalid product ID",
+      });
+    }
+
+    const product = products.find((item) => item.id === id);
+
+    if (!product) {
+      return reply.code(404).send({
+        error: "Product not found",
+      });
+    }
+
+    return product;
+  }
+);
+
 app.listen({ port: 3000, host: "127.0.0.1" })
   .then((address) => {
     console.log(`MiniOrder API running at ${address}`);
