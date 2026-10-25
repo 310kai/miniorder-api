@@ -1,4 +1,10 @@
 
+import Fastify from "fastify";
+
+const app = Fastify({
+  logger: true,
+});
+
 type Product = {
   id: number;
   name: string;
@@ -11,5 +17,19 @@ const products: Product[] = [
   { id: 3, name: "抹茶ラテ", price: 500 },
 ];
 
-console.log("MiniOrder 商品一覧");
-console.table(products);
+app.get("/health", async () => {
+  return { status: "ok" };
+});
+
+app.get("/products", async () => {
+  return products;
+});
+
+app.listen({ port: 3000, host: "127.0.0.1" })
+  .then((address) => {
+    console.log(`MiniOrder API running at ${address}`);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

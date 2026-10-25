@@ -4,7 +4,8 @@
   "description": "MiniOrderは、架空のカフェ向けモバイルオーダーアプリです。お客様がスマートフォンから商品を注文し、店舗スタッフが注文の受付・調理・提供状況を一元管理できる仕組みを構築します。注文待ち時間の削減や業務効率化、顧客体験の向上を目指します。また、個人開発を通じてTypeScript・Node.jsによるREST API開発、データベース設計、認証・認可、自動テスト、AWSを活用したクラウド環境の構築・運用を実践的に習得します。",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx watch src/index.ts"
   },
   "repository": {
     "type": "git",
@@ -13,7 +14,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/310kai/miniorder-api/issues"
   },
@@ -22,5 +23,8 @@
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "fastify": "^5.12.7"
   }
 }
