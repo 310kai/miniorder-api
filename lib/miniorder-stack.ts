@@ -27,7 +27,7 @@ export class MiniOrderStack extends Stack {
       this,
       "MiniOrderHealthFunction",
       {
-        entry: "src/lambda/health.ts",
+        entry: "src/lambda/fastify.ts",
         handler: "handler",
         runtime: Runtime.NODEJS_24_X,
         memorySize: 128,

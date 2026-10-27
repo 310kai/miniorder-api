@@ -5,3 +5,14 @@ dist/
 .DS_Store
 .env.test
 cdk.out/
+
+
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+cdk.out/
+.DS_Store
+*.pem
+*.key
